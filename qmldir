@@ -1,0 +1,9 @@
+module makima
+singleton Theme 1.0 Theme.qml
+singleton MakimaService 1.0 MakimaService.qml
+MouseDisplay 1.0 MouseDisplay.qml
+BindingsList 1.0 BindingsList.qml
+CaptureModal 1.0 CaptureModal.qml
+NameProfileModal 1.0 NameProfileModal.qml
+AppPickerModal 1.0 AppPickerModal.qml
+IconEditModal 1.0 IconEditModal.qml
