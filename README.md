@@ -38,9 +38,28 @@ named profiles per app.
 
 ## Install
 
+### Per-user (any distro)
+
 ```sh
-git clone https://github.com/<you>/makima-mx ~/projects/makima-mx
+git clone https://github.com/GarrettBlackmon/makima-mx ~/projects/makima-mx
 cd ~/projects/makima-mx
+./scripts/install-local.sh        # adds launcher + .desktop + icons
+makima-mx                         # launch (or pick it from your app menu)
+```
+
+Uninstall: `./scripts/uninstall-local.sh` (preserves your saved bindings).
+
+### Arch / paru
+
+```sh
+git clone https://github.com/GarrettBlackmon/makima-mx
+cd makima-mx
+makepkg -si
+```
+
+### Just run it without installing
+
+```sh
 quickshell -p ./shell.qml
 ```
 
