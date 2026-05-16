@@ -4,7 +4,7 @@ A Quickshell-based UI for [makima](https://github.com/cyber-sushi/makima) — re
 your Logitech MX Master 3/3S buttons interactively, with per-app overrides and
 named profiles per app.
 
-<img width="2029" height="1391" alt="image" src="https://github.com/user-attachments/assets/86b7e3f9-1af0-4dc6-b097-79060edfbeeb" />
+[![makima-mx demo](https://img.youtube.com/vi/E22ZDPkKVSw/maxresdefault.jpg)](https://www.youtube.com/watch?v=E22ZDPkKVSw)
 
 
 
