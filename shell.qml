@@ -514,7 +514,6 @@ ShellRoot {
                         MouseArea {
                             id: pMA
                             anchors.fill: parent
-                            anchors.rightMargin: 28
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
