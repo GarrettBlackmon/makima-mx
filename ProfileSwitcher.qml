@@ -95,6 +95,12 @@ Scope {
         interval: 2000
         onTriggered: root.chordWatch.running = true
     }
+    // The watcher starts before profiles.json has loaded, so its first run can
+    // carry the fallback device name. Bounce it whenever the real name lands.
+    property Connections _deviceNameWatch: Connections {
+        target: MakimaService
+        function onDeviceNameChanged() { root.chordWatch.running = false }
+    }
     // Absolute cap so a dead watcher can't leave the overlay stuck open.
     property Timer failsafe: Timer {
         interval: 12000

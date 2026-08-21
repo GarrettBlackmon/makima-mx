@@ -110,6 +110,10 @@ def main():
     held = False
     accum = 0
     while True:
+        # Exit when orphaned (re-parented to init): our spawner died and will
+        # never read the pipe, so lingering would just leak watchers.
+        if os.getppid() == 1:
+            return 0
         if phys is None:
             phys = open_by_name(PHYS_NAME)
             if phys is None:
