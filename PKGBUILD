@@ -1,13 +1,13 @@
 # Maintainer: Garrett Blackmon <garrett@blackmon.dev>
 pkgname=makima-mx-git
 _pkgname=makima-mx
-pkgver=r1.0
+pkgver=r4.8ebfcd6
 pkgrel=1
 pkgdesc="Quickshell GUI for makima — visual remapper for Logitech MX Master 3/3S"
 arch=('any')
 url="https://github.com/GarrettBlackmon/makima-mx"
 license=('MIT')
-depends=('quickshell' 'makima' 'bash' 'awk' 'systemd')
+depends=('quickshell' 'makima' 'bash' 'awk' 'systemd' 'python')
 optdepends=(
     'dankmaterialshell: live Matugen theme colors'
     'hyprland: live active-application indicator'
@@ -32,6 +32,9 @@ package() {
     install -m644 assets/mouse.png       "$pkgdir/usr/share/$_pkgname/assets/"
     install -m644 assets/icon.svg        "$pkgdir/usr/share/$_pkgname/assets/"
     install -m644 assets/fonts/*.ttf     "$pkgdir/usr/share/$_pkgname/assets/fonts/"
+
+    # Chord profile-switcher helper
+    install -Dm755 scripts/chord-watch.py "$pkgdir/usr/share/$_pkgname/scripts/chord-watch.py"
 
     # Launcher in /usr/bin
     install -d "$pkgdir/usr/bin"
