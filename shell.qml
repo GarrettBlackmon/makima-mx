@@ -611,4 +611,6 @@ ShellRoot {
             }
         }
     }
+
+    ProfileSwitcher {}
 }

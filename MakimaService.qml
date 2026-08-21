@@ -18,6 +18,9 @@ QtObject {
     // The evdev Name field of the active mouse (= makima's per-device TOML basename).
     // Detected at startup from /proc/bus/input/devices; persisted across runs.
     property string deviceName: "Logitech MX Master 3S"   // fallback until probe runs
+    // /dev/input/eventN node of that mouse — used by the profile-switcher's
+    // chord-release watcher (EVIOCGKEY works even while makima holds the grab).
+    property string deviceEventNode: ""
 
     readonly property var buttonCodeOf: ({
         "left":       "BTN_LEFT",
@@ -66,6 +69,8 @@ QtObject {
     // ---- live status ----
     property bool daemonRunning: false
     property bool deviceConnected: false
+    // True once a TOML scan has run with the probe-confirmed device name.
+    property bool _scannedOnce: false
 
     // Currently-focused window's WM_CLASS, reactive via Hyprland IPC
     readonly property string focusedClass: {
@@ -92,19 +97,28 @@ QtObject {
     // that has a mouseN handler. Emits the evdev Name (used by makima as TOML basename).
     property Process _deviceProbe: Process {
         command: ["bash", "-c",
-            "awk 'BEGIN{n=\"\"} /^I:/{n=\"\"} /^N: Name=/{gsub(/^N: Name=\"|\"$/,\"\",$0); n=$0} /^H: Handlers=/{if(n ~ /Logitech|MX Master/ && $0 ~ /mouse[0-9]/){print n; exit}}' /proc/bus/input/devices"
+            "awk 'BEGIN{n=\"\"} /^I:/{n=\"\"} /^N: Name=/{gsub(/^N: Name=\"|\"$/,\"\",$0); n=$0} /^H: Handlers=/{if(n ~ /Logitech|MX Master/ && $0 ~ /mouse[0-9]/){match($0, /event[0-9]+/); print n \"\\t\" substr($0, RSTART, RLENGTH); exit}}' /proc/bus/input/devices"
         ]
         stdout: StdioCollector {
             onStreamFinished: {
                 const found = text.trim()
                 if (found) {
+                    const parts = found.split("\t")
+                    const name = parts[0]
+                    root.deviceEventNode = parts.length > 1 ? "/dev/input/" + parts[1] : ""
                     root.deviceConnected = true
-                    if (found !== root.deviceName) {
-                        root.deviceName = found
+                    if (name !== root.deviceName) {
+                        root.deviceName = name
                         root._persistJson()
                         // Pick up any per-app TOMLs for this device that we don't know about
                         root._scanProc.running = true
+                    } else if (!root._scannedOnce) {
+                        // The startup scan raced the JSON load and ran with the
+                        // fallback device name — run the real one now that the
+                        // probe has confirmed the name.
+                        root._scanProc.running = true
                     }
+                    root._scannedOnce = true
                 } else {
                     root.deviceConnected = false
                 }
@@ -262,6 +276,7 @@ QtObject {
         const sections = dumpText.split("===MAKIMA-MX-CLASS===")
         const updated = Object.assign({}, apps)
         let touched = false
+        let needChordSync = false
         for (let i = 1; i < sections.length; i++) {
             const sec = sections[i]
             const nl = sec.indexOf("\n")
@@ -280,11 +295,41 @@ QtObject {
                 }
                 touched = true
             }
+            // TOML still carries the abandoned v1 chord block: regenerate clean.
+            if (toml.indexOf(chordMarker) >= 0) needChordSync = true
         }
         if (touched) {
             apps = updated
             _persistJson()
         }
+        console.log("makima-mx: TOML scan done — sections:", sections.length - 1,
+                    "needChordSync:", needChordSync)
+        if (needChordSync) _syncAllTomls()
+    }
+
+    // Rewrite every known TOML in one shot (chord upgrade / device rename),
+    // then restart makima once. Contents go through base64 so no shell quoting
+    // can mangle them.
+    property Process _syncProc: Process {
+        onExited: root._reloadProc.running = true
+    }
+    function _syncAllTomls() {
+        const ks = appKeys
+        let script = ""
+        for (let i = 0; i < ks.length; i++) {
+            const k = ks[i]
+            const a = apps[k]
+            if (!a) continue
+            const p = a.profiles[a.activeProfile]
+            const b = p ? (p.bindings || {}) : {}
+            const content = _renderToml(b, _bannerFor(k, a))
+            script += "printf '%s' '" + Qt.btoa(content) + "' | base64 -d > \""
+                    + tomlPathFor(k) + "\"\n"
+        }
+        if (!script) return
+        console.log("makima-mx: chord-syncing", ks.length, "TOMLs")
+        _syncProc.command = ["bash", "-c", script]
+        _syncProc.running = true
     }
 
     function _parseRemapToml(text) {
@@ -314,18 +359,20 @@ QtObject {
     }
 
     // ---- TOML writing ----
+    function _bannerFor(appKey, a) {
+        return appKey === globalKey
+            ? ["# Generated by makima-mx — device-level TOML.",
+               "# Active profile: " + a.activeProfile]
+            : ["# Generated by makima-mx — per-app override for " + appKey + ".",
+               "# Active profile: " + a.activeProfile]
+    }
     function _writeTomlFor(appKey) {
         const a = apps[appKey]
         if (!a) return
         const p = a.profiles[a.activeProfile]
         const b = p ? (p.bindings || {}) : {}
-        const banner = appKey === globalKey
-            ? ["# Generated by makima-mx — device-level TOML.",
-               "# Active profile: " + a.activeProfile]
-            : ["# Generated by makima-mx — per-app override for " + appKey + ".",
-               "# Active profile: " + a.activeProfile]
         _writeTomlFile.path = tomlPathFor(appKey)
-        _writeTomlFile.setText(_renderToml(b, banner))
+        _writeTomlFile.setText(_renderToml(b, _bannerFor(appKey, a)))
     }
     function _renderToml(bindings, bannerLines) {
         let lines = bannerLines.slice()
@@ -344,6 +391,11 @@ QtObject {
         lines.push("")
         return lines.join("\n")
     }
+
+    // Marker of the abandoned v1 chord approach (makima [commands] can't see
+    // remapped buttons as modifiers). Any TOML still carrying it gets
+    // regenerated clean; the chord now lives in scripts/chord-watch.py.
+    readonly property string chordMarker: "# makima-mx-chord: v1"
     function _deleteAppTomlFile(appKey) {
         if (appKey === globalKey) return
         _rmProc.command = ["rm", "-f", tomlPathFor(appKey)]
@@ -417,19 +469,30 @@ QtObject {
         _persistJson()
     }
 
-    // profile management (within active app)
-    function setActiveProfile(name) {
-        const a = apps[activeApp]
+    // profile management
+    // Per-appKey variants — used by the GUI (via activeApp) and the
+    // chord profile switcher (via effectiveAppKey).
+    function profileNamesFor(appKey) {
+        const a = apps[appKey]
+        return a ? Object.keys(a.profiles) : []
+    }
+    function activeProfileFor(appKey) {
+        const a = apps[appKey]
+        return a ? a.activeProfile : ""
+    }
+    function setActiveProfileFor(appKey, name) {
+        const a = apps[appKey]
         if (!a || !a.profiles[name] || a.activeProfile === name) return
         const all = Object.assign({}, apps)
-        const cur = Object.assign({}, all[activeApp])
+        const cur = Object.assign({}, all[appKey])
         cur.activeProfile = name
-        all[activeApp] = cur
+        all[appKey] = cur
         apps = all
         _persistJson()
-        _writeTomlFor(activeApp)
+        _writeTomlFor(appKey)
         _reloadProc.running = true
     }
+    function setActiveProfile(name) { setActiveProfileFor(activeApp, name) }
     function createProfile(name) {
         const t = (name || "").trim()
         if (!t) return false

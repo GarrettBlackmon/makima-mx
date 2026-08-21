@@ -7,3 +7,4 @@ CaptureModal 1.0 CaptureModal.qml
 NameProfileModal 1.0 NameProfileModal.qml
 AppPickerModal 1.0 AppPickerModal.qml
 IconEditModal 1.0 IconEditModal.qml
+ProfileSwitcher 1.0 ProfileSwitcher.qml

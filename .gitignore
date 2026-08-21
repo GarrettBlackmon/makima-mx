@@ -1,2 +1,8 @@
 *.bak
 *.backup
+
+# makepkg artifacts
+pkg/
+src/
+makima-mx/
+*.pkg.tar.zst

@@ -17,6 +17,8 @@ named profiles per app.
 - Drag-to-reorder app pills · custom display names · custom icons
 - Live status: active app (focused-window aware), makima daemon health, device
   connection
+- **Chord profile switcher**: hold Back+Forward and scroll to flip through the
+  focused app's profiles in an on-screen overlay, release to apply (see below)
 - Auto-themes to DMS / Matugen colors when available
 
 ## Requirements
@@ -83,6 +85,42 @@ device shows under a different name (e.g. via a non-Logitech BT adapter), edit
 The probe re-runs every 5s, so unplugging or pairing the mouse updates the
 top-right status dot live.
 
+## Profile switcher (chord)
+
+Hold **Back + Forward** together and a small overlay appears listing the
+profiles of whatever app is focused (falling back to Global). Scroll to move
+the selection while holding, then release both buttons: if you landed on a
+different profile it is written out and makima is restarted once. Releasing on
+the current profile is a no-op, so you can peek at the list freely.
+
+While the chord is held the switcher is *modal*: scrolling moves the highlight
+only, nothing leaks to the app underneath (no zooming your game), and the
+cursor freezes until you release.
+
+How it works, since makima itself can't do this: makima holds an exclusive
+grab on the mouse, and its `[commands]` combos can't treat remapped buttons as
+modifiers. So `scripts/chord-watch.py` (spawned by the shell, restarted if it
+dies) detects the chord out-of-band via the `EVIOCGKEY` state ioctl, which the
+kernel answers even for grabbed devices. Scroll detents are read from makima's
+own virtual pointer device, which is also grabbed for the duration of the hold
+to keep the menu modal. The helper prints `DOWN` / `SCROLL ±1` / `UP` lines
+that drive the overlay.
+
+Requirements: your user in the `input` group (for makima's virtual device
+nodes; most makima setups already have this) and `python3` (stdlib only).
+
+Debug/scripting entry points, no mouse needed:
+
+```sh
+qs ipc -p ~/projects/makima-mx/shell.qml call switcher begin   # open overlay
+qs ipc -p ~/projects/makima-mx/shell.qml call switcher next    # move selection
+qs ipc -p ~/projects/makima-mx/shell.qml call switcher commit  # apply + close
+```
+
+Known wart: the two chord buttons still fire their bound actions once on
+press, because makima emits them before the chord is detectable. Pick your
+chord-button bindings with that in mind.
+
 ## Limitations
 
 - **MX Master 3/3S only** — button mappings (`BTN_SIDE`/`BTN_EXTRA`/`BTN_FORWARD`)
@@ -99,6 +137,8 @@ top-right status dot live.
 |---|---|
 | `shell.qml` | App entry, top bar, layout, modal hosting |
 | `MakimaService.qml` | State, persistence, TOML I/O, device probe, daemon probe |
+| `ProfileSwitcher.qml` | Chord-driven profile switcher overlay + IPC |
+| `scripts/chord-watch.py` | Chord/scroll watcher (EVIOCGKEY + virtual-device reader) |
 | `MouseDisplay.qml` | Mouse image + clickable overlays |
 | `BindingsList.qml` | Right-hand binding rows |
 | `CaptureModal.qml` | Key-capture popup |
